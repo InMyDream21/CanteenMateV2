@@ -106,7 +106,6 @@ struct EditMenuModal: View {
                     .background(Color.blue)
                     .cornerRadius(10)
             }
-            .background(Color(.systemGray6))
             .padding()
             .alert("Invalid Input", isPresented: $showValidationAlert) {
                 Button("OK", role: .cancel) { }
@@ -131,7 +130,9 @@ struct EditMenuModal: View {
             }
             .padding(.bottom, 24)
         }
-        .background(Color(.systemGray6))
+        .background(Color(UIColor { trait in
+            trait.userInterfaceStyle == .dark ? .black : .systemGray6
+        }))
         
     }
 }

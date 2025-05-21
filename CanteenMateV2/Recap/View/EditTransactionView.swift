@@ -112,7 +112,9 @@ struct EditTransactionView: View {
             }
             .padding(.bottom, 24)
         }
-        .background(Color(.systemGray6))
+        .background(Color(UIColor { trait in
+            trait.userInterfaceStyle == .dark ? .black : .systemGray6
+        }))
     }
 }
 

@@ -82,7 +82,9 @@ struct AddExpenseView: View {
                 Text(validationMessage)
             }
         }
-        .background(Color(.systemGray6))
+        .background(Color(UIColor { trait in
+            trait.userInterfaceStyle == .dark ? .black : .systemGray6
+        }))
     }
 }
 

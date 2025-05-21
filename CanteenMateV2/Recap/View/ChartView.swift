@@ -33,7 +33,27 @@ struct ChartView: View {
     @Binding var selectedDate: Date
     
     private var filteredTransaction: [Transaction] {
-        transactions.filter { txn in calendar.isDate(txn.date, inSameDayAs: selectedDate)}
+        switch filter {
+        case .daily:
+            guard let startDate = calendar.date(byAdding: .day, value: -6, to: selectedDate) else {
+                return []
+            }
+            return transactions.filter { txn in
+                calendar.isDate(txn.date, inSameDayAs: selectedDate) ||
+                (txn.date >= startDate && txn.date <= selectedDate)
+            }
+
+        case .monthly:
+            let selectedYear = calendar.component(.year, from: selectedDate)
+            let selectedMonth = calendar.component(.month, from: selectedDate)
+            
+            return transactions.filter { txn in
+                let txnYear = calendar.component(.year, from: txn.date)
+                let txnMonth = calendar.component(.month, from: txn.date)
+                
+                return txnYear == selectedYear && txnMonth <= selectedMonth
+            }
+        }
     }
 
     var chartData: [ChartDataPoint] {
@@ -80,20 +100,27 @@ struct ChartView: View {
                             DragGesture()
                                 .onChanged { value in
                                     let location = value.location
-                                    if let date: Date = proxy.value(atX: location.x)
-                                    {
-                                        let nearest = chartData.min(by: {
-                                            abs(
-                                                $0.date.timeIntervalSince1970
-                                                    - date.timeIntervalSince1970)
-                                                < abs(
-                                                    $1.date.timeIntervalSince1970
-                                                        - date.timeIntervalSince1970
-                                                )
-                                        })
+                                    if let date: Date = proxy.value(atX: location.x) {
+                                        let calendar = Calendar.current
+
+                                        let nearest: ChartDataPoint?
+
+                                        if filter == .monthly {
+                                            nearest = chartData.first(where: {
+                                                calendar.component(.month, from: $0.date) == calendar.component(.month, from: date) &&
+                                                calendar.component(.year, from: $0.date) == calendar.component(.year, from: date)
+                                            })
+                                        } else {
+                                            nearest = chartData.min(by: {
+                                                abs($0.date.timeIntervalSince1970 - date.timeIntervalSince1970) <
+                                                abs($1.date.timeIntervalSince1970 - date.timeIntervalSince1970)
+                                            })
+                                        }
+
                                         selectedPoint = nearest
                                     }
                                 }
+
                                 .onEnded { _ in
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                                         selectedPoint = nil
@@ -104,14 +131,47 @@ struct ChartView: View {
             }
             .frame(height: 300)
             
-            if let point = selectedPoint {
-                Text("\(point.date.formatted(date: .abbreviated, time: .omitted)): RP\(Int(point.totalAmount).formattedWithSeparator())")
-                    .font(.caption)
-                    .padding(8)
-                    .background(Color(.systemBackground).opacity(0.9))
-                    .cornerRadius(8)
-                    .shadow(radius: 2)
-                    .transition(.opacity)
+            if let selected = selectedPoint {
+                let selectedDate = selected.date
+                let points = dataPointsFor(date: selectedDate)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(selectedDate.formatted(date: .abbreviated, time: .omitted))
+                        .font(.caption)
+                        .bold()
+
+                    switch filter {
+                    case .daily:
+                        let income = points.first(where: { $0.category == .income })?.totalAmount ?? 0
+                        let expense = points.first(where: { $0.category == .expense })?.totalAmount ?? 0
+                        let net = income - expense
+
+                        Text("Income: Rp \(Int(income).formattedWithSeparator())")
+                            .foregroundColor(.green)
+                        Text("Expense: Rp \(Int(expense).formattedWithSeparator())")
+                            .foregroundColor(.red)
+                        Text("Net: Rp \(Int(net).formattedWithSeparator())")
+                            .foregroundColor(.blue)
+
+                    case .monthly:
+                        let profit = points.first(where: { $0.category == .profit })?.totalAmount ?? 0
+                        let loss = points.first(where: { $0.category == .loss })?.totalAmount ?? 0
+                        let net = profit - loss
+
+                        Text("Profit: Rp \(Int(profit).formattedWithSeparator())")
+                            .foregroundColor(.green)
+                        Text("Loss: Rp \(Int(loss).formattedWithSeparator())")
+                            .foregroundColor(.red)
+                        Text("Net: Rp \(Int(net).formattedWithSeparator())")
+                            .foregroundColor(.blue)
+                    }
+                }
+                .font(.caption2)
+                .padding(8)
+                .background(Color(.systemBackground).opacity(0.95))
+                .cornerRadius(8)
+                .shadow(radius: 2)
+                .transition(.opacity)
             }
         }
         .padding()
@@ -193,12 +253,24 @@ struct ChartView: View {
             let profit = dayTotals.filter { $0.1 > 0 }.reduce(0) { $0 + $1.1 }
             let loss = dayTotals.filter { $0.1 < 0 }.reduce(0) { $0 + abs($1.1) }
             let total = profit - loss
-
+            
             return [
                 ChartDataPoint(label: monthLabel, totalAmount: profit, date: monthDate, category: .profit),
                 ChartDataPoint(label: monthLabel, totalAmount: loss, date: monthDate, category: .loss),
                 ChartDataPoint(label: monthLabel, totalAmount: total, date: monthDate, category: .total),
             ]
+        }
+    }
+    
+    func dataPointsFor(date: Date) -> [ChartDataPoint] {
+        switch filter {
+        case .daily:
+            return chartData.filter { Calendar.current.isDate($0.date, inSameDayAs: date) }
+        case .monthly:
+            return chartData.filter {
+                Calendar.current.component(.month, from: $0.date) == Calendar.current.component(.month, from: date) &&
+                Calendar.current.component(.year, from: $0.date) == Calendar.current.component(.year, from: date)
+            }
         }
     }
 }

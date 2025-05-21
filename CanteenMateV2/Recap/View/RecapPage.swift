@@ -125,6 +125,10 @@ struct RecapPage: View {
                     } else {
                         List(filteredMonthlyTransactions) { group in
                             MonthlyTransactionRow(transaction: group)
+                                .onTapGesture {
+                                    selectedFilter = .daily
+                                    selectedDate = group.date
+                                }
                         }
                     }
                 }
